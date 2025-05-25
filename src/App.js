@@ -748,9 +748,6 @@ export default function App() {
         <div style={styles.header}>
           <h1 style={styles.mainTitle}>CINEMA QUEUE</h1>
           <div style={styles.subtitle}>WHAT ARE WE WATCHING NEXT</div>
-          <p style={styles.urlText}>
-            Visit: <span style={styles.urlCode}>whatarewewatchingnext</span>
-          </p>
           {loading && (
             <p style={{ color: "#60a5fa", marginTop: "8px" }}>
               Loading movies...
