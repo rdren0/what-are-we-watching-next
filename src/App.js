@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Film, Plus, Trash2, Clock, Users, X } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Film, Plus } from "lucide-react";
 
 export default function App() {
   const [movies, setMovies] = useState([]);
@@ -41,96 +41,104 @@ export default function App() {
 
   console.log("TMDB_API_KEY:", TMDB_API_KEY ? "Set ✅" : "Missing ❌");
 
-  // Initialize Supabase client
-  const supabase = {
-    from: (table) => ({
-      select: (columns = "*") => ({
-        eq: (column, value) =>
-          fetchData(
-            `${SUPABASE_URL}/rest/v1/${table}?select=${columns}&${column}=eq.${value}`
-          ),
-        order: (column, options = {}) =>
-          fetchData(
-            `${SUPABASE_URL}/rest/v1/${table}?select=${columns}&order=${column}.${
-              options.ascending ? "asc" : "desc"
-            }`
-          ),
-        then: (callback) =>
-          fetchData(`${SUPABASE_URL}/rest/v1/${table}?select=${columns}`).then(
-            callback
-          ),
-      }),
-      insert: (data) => ({
-        select: () => ({
+  const fetchData = useCallback(
+    async (url) => {
+      try {
+        const response = await fetch(url, {
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
+          },
+        });
+        const data = await response.json();
+        return { data, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    [SUPABASE_ANON_KEY]
+  );
+
+  const insertData = useMemo(
+    () => async (url, payload) => {
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
+            Prefer: "return=representation",
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        return { data, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    [SUPABASE_ANON_KEY]
+  );
+
+  const deleteData = useMemo(
+    () => async (url) => {
+      try {
+        await fetch(url, {
+          method: "DELETE",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
+          },
+        });
+        return { error: null };
+      } catch (error) {
+        return { error };
+      }
+    },
+    [SUPABASE_ANON_KEY]
+  );
+
+  const supabase = useMemo(
+    () => ({
+      from: (table) => ({
+        select: (columns = "*") => ({
+          eq: (column, value) =>
+            fetchData(
+              `${SUPABASE_URL}/rest/v1/${table}?select=${columns}&${column}=eq.${value}`
+            ),
+          order: (column, options = {}) =>
+            fetchData(
+              `${SUPABASE_URL}/rest/v1/${table}?select=${columns}&order=${column}.${
+                options.ascending ? "asc" : "desc"
+              }`
+            ),
           then: (callback) =>
-            insertData(`${SUPABASE_URL}/rest/v1/${table}`, data).then(callback),
+            fetchData(
+              `${SUPABASE_URL}/rest/v1/${table}?select=${columns}`
+            ).then(callback),
+        }),
+        insert: (data) => ({
+          select: () => ({
+            then: (callback) =>
+              insertData(`${SUPABASE_URL}/rest/v1/${table}`, data).then(
+                callback
+              ),
+          }),
+        }),
+        delete: () => ({
+          eq: (column, value) =>
+            deleteData(
+              `${SUPABASE_URL}/rest/v1/${table}?${column}=eq.${value}`
+            ),
         }),
       }),
-      delete: () => ({
-        eq: (column, value) =>
-          deleteData(`${SUPABASE_URL}/rest/v1/${table}?${column}=eq.${value}`),
-      }),
     }),
-  };
-
-  // Helper functions for Supabase API calls
-  const fetchData = async (url) => {
-    try {
-      const response = await fetch(url, {
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          "Content-Type": "application/json",
-        },
-      });
-      const data = await response.json();
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error };
-    }
-  };
-
-  const insertData = async (url, payload) => {
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          "Content-Type": "application/json",
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error };
-    }
-  };
-
-  const deleteData = async (url) => {
-    try {
-      const response = await fetch(url, {
-        method: "DELETE",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          "Content-Type": "application/json",
-        },
-      });
-      return { error: null };
-    } catch (error) {
-      return { error };
-    }
-  };
-
-  // Load movies from Supabase on component mount
-  useEffect(() => {
-    loadMovies();
-  }, []);
-
-  const loadMovies = async () => {
+    [SUPABASE_URL, fetchData, insertData, deleteData]
+  );
+  const loadMovies = useCallback(async () => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       setError("Supabase configuration missing");
       setLoading(false);
@@ -150,8 +158,11 @@ export default function App() {
       setMovies(data || []);
     }
     setLoading(false);
-  };
+  }, [SUPABASE_URL, SUPABASE_ANON_KEY, supabase]);
 
+  useEffect(() => {
+    loadMovies();
+  }, [loadMovies, SUPABASE_URL, SUPABASE_ANON_KEY]);
   // Search TMDB for movies
   const searchTMDB = async (query) => {
     if (!query.trim() || !TMDB_API_KEY) return;
