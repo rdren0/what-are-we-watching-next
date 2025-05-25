@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { Film, Plus } from "lucide-react";
+import React, { useState, useEffect } from "react";
 
 export default function App() {
   const [movies, setMovies] = useState([]);
@@ -22,123 +21,100 @@ export default function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
 
-  // Supabase configuration
   const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
-  // Debug logging
-  console.log("Environment variables check:");
-  console.log("SUPABASE_URL:", SUPABASE_URL ? "Set ✅" : "Missing ❌");
-  console.log(
-    "SUPABASE_ANON_KEY:",
-    SUPABASE_ANON_KEY ? "Set ✅" : "Missing ❌"
-  );
-
-  // TMDB API configuration
   const TMDB_API_KEY = process.env.REACT_APP_MOVIES_API;
   const TMDB_BASE_URL = "https://api.themoviedb.org/3";
   const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500";
 
-  console.log("TMDB_API_KEY:", TMDB_API_KEY ? "Set ✅" : "Missing ❌");
-
-  const fetchData = useCallback(
-    async (url) => {
-      try {
-        const response = await fetch(url, {
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            "Content-Type": "application/json",
-          },
-        });
-        const data = await response.json();
-        return { data, error: null };
-      } catch (error) {
-        return { data: null, error };
-      }
-    },
-    [SUPABASE_ANON_KEY]
-  );
-
-  const insertData = useMemo(
-    () => async (url, payload) => {
-      try {
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            "Content-Type": "application/json",
-            Prefer: "return=representation",
-          },
-          body: JSON.stringify(payload),
-        });
-        const data = await response.json();
-        return { data, error: null };
-      } catch (error) {
-        return { data: null, error };
-      }
-    },
-    [SUPABASE_ANON_KEY]
-  );
-
-  const deleteData = useMemo(
-    () => async (url) => {
-      try {
-        await fetch(url, {
-          method: "DELETE",
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            "Content-Type": "application/json",
-          },
-        });
-        return { error: null };
-      } catch (error) {
-        return { error };
-      }
-    },
-    [SUPABASE_ANON_KEY]
-  );
-
-  const supabase = useMemo(
-    () => ({
-      from: (table) => ({
-        select: (columns = "*") => ({
-          eq: (column, value) =>
-            fetchData(
-              `${SUPABASE_URL}/rest/v1/${table}?select=${columns}&${column}=eq.${value}`
-            ),
-          order: (column, options = {}) =>
-            fetchData(
-              `${SUPABASE_URL}/rest/v1/${table}?select=${columns}&order=${column}.${
-                options.ascending ? "asc" : "desc"
-              }`
-            ),
+  const supabase = {
+    from: (table) => ({
+      select: (columns = "*") => ({
+        eq: (column, value) =>
+          fetchData(
+            `${SUPABASE_URL}/rest/v1/${table}?select=${columns}&${column}=eq.${value}`
+          ),
+        order: (column, options = {}) =>
+          fetchData(
+            `${SUPABASE_URL}/rest/v1/${table}?select=${columns}&order=${column}.${
+              options.ascending ? "asc" : "desc"
+            }`
+          ),
+        then: (callback) =>
+          fetchData(`${SUPABASE_URL}/rest/v1/${table}?select=${columns}`).then(
+            callback
+          ),
+      }),
+      insert: (data) => ({
+        select: () => ({
           then: (callback) =>
-            fetchData(
-              `${SUPABASE_URL}/rest/v1/${table}?select=${columns}`
-            ).then(callback),
-        }),
-        insert: (data) => ({
-          select: () => ({
-            then: (callback) =>
-              insertData(`${SUPABASE_URL}/rest/v1/${table}`, data).then(
-                callback
-              ),
-          }),
-        }),
-        delete: () => ({
-          eq: (column, value) =>
-            deleteData(
-              `${SUPABASE_URL}/rest/v1/${table}?${column}=eq.${value}`
-            ),
+            insertData(`${SUPABASE_URL}/rest/v1/${table}`, data).then(callback),
         }),
       }),
+      delete: () => ({
+        eq: (column, value) =>
+          deleteData(`${SUPABASE_URL}/rest/v1/${table}?${column}=eq.${value}`),
+      }),
     }),
-    [SUPABASE_URL, fetchData, insertData, deleteData]
-  );
-  const loadMovies = useCallback(async () => {
+  };
+
+  const fetchData = async (url) => {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const data = await response.json();
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error };
+    }
+  };
+
+  const insertData = async (url, payload) => {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error };
+    }
+  };
+
+  const deleteData = async (url) => {
+    try {
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          "Content-Type": "application/json",
+        },
+      });
+      return { error: null };
+    } catch (error) {
+      return { error };
+    }
+  };
+
+  useEffect(() => {
+    loadMovies();
+  }, []);
+
+  const loadMovies = async () => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       setError("Supabase configuration missing");
       setLoading(false);
@@ -153,17 +129,12 @@ export default function App() {
 
     if (error) {
       setError("Failed to load movies");
-      console.error("Error loading movies:", error);
     } else {
       setMovies(data || []);
     }
     setLoading(false);
-  }, [SUPABASE_URL, SUPABASE_ANON_KEY, supabase]);
+  };
 
-  useEffect(() => {
-    loadMovies();
-  }, [loadMovies, SUPABASE_URL, SUPABASE_ANON_KEY]);
-  // Search TMDB for movies
   const searchTMDB = async (query) => {
     if (!query.trim() || !TMDB_API_KEY) return;
 
@@ -175,15 +146,13 @@ export default function App() {
         )}`
       );
       const data = await response.json();
-      setSearchResults(data.results?.slice(0, 5) || []); // Show top 5 results
+      setSearchResults(data.results?.slice(0, 5) || []);
     } catch (error) {
-      console.error("Error searching TMDB:", error);
       setSearchResults([]);
     }
     setIsSearching(false);
   };
 
-  // Get detailed movie info from TMDB
   const getMovieDetails = async (movieId) => {
     if (!TMDB_API_KEY) return null;
 
@@ -194,16 +163,11 @@ export default function App() {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error("Error fetching movie details:", error);
       return null;
     }
   };
 
-  // Select movie from TMDB search results
   const selectTMDBMovie = async (movie) => {
-    console.log("Selecting movie:", movie); // Debug log
-
-    // Get detailed movie information
     setIsSearching(true);
     const movieDetails = await getMovieDetails(movie.id);
     setIsSearching(false);
@@ -227,7 +191,6 @@ export default function App() {
         : "",
     };
 
-    console.log("Setting newMovie to:", updatedMovie); // Debug log
     setNewMovie(updatedMovie);
     setSearchResults([]);
     setMovieSearch("");
@@ -255,7 +218,6 @@ export default function App() {
 
     if (error) {
       setError("Failed to add movie");
-      console.error("Error adding movie:", error);
     } else {
       setMovies([...movies, data[0]]);
       setNewMovie({
@@ -277,7 +239,6 @@ export default function App() {
 
     if (error) {
       setError("Failed to remove movie");
-      console.error("Error removing movie:", error);
     } else {
       setMovies(movies.filter((movie) => movie.id !== id));
     }
@@ -340,15 +301,21 @@ export default function App() {
       display: "inline-block",
       margin: "0 auto",
     },
+    posterFrameComingSoon: {
+      position: "relative",
+      display: "inline-block",
+      margin: "0 auto",
+      width: "253px",
+    },
     frameOuter: {
       background: "linear-gradient(to bottom, #9ca3af, #6b7280)",
       borderRadius: "8px",
       boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-      padding: "16px",
+      padding: "12px",
     },
     frameInner: {
-      width: "320px",
-      height: "480px",
+      width: "280px",
+      height: "420px",
       background: "linear-gradient(to bottom, #e5e7eb, #ffffff)",
       borderRadius: "4px",
       border: "2px solid #d1d5db",
@@ -356,13 +323,14 @@ export default function App() {
       overflow: "hidden",
     },
     frameInnerSmall: {
-      width: "256px",
-      height: "384px",
+      width: "224px",
+      height: "336px",
     },
     posterImage: {
       width: "100%",
       height: "100%",
       objectFit: "cover",
+      objectPosition: "center top",
     },
     posterPlaceholder: {
       width: "100%",
@@ -604,9 +572,11 @@ export default function App() {
     },
     movieGrid: {
       display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-      gap: "48px",
+      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+      gap: "32px",
       justifyItems: "center",
+      maxWidth: "1200px",
+      margin: "0 auto",
     },
     emptyState: {
       textAlign: "center",
@@ -634,16 +604,21 @@ export default function App() {
     },
   };
 
-  const PosterFrame = ({ movie, label, isMain = false, onRemove = null }) => {
+  const PosterFrame = ({
+    movie,
+    label,
+    isMain = false,
+    onRemove = null,
+    styled = undefined,
+  }) => {
     const [isHovered, setIsHovered] = useState(false);
 
     return (
       <div
-        style={styles.posterFrame}
+        style={styled ?? styles.posterFrame}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Movie Poster Frame */}
         <div style={styles.frameOuter}>
           <div
             style={{
@@ -659,7 +634,15 @@ export default function App() {
               />
             ) : (
               <div style={styles.posterPlaceholder}>
-                <Film size={64} style={{ opacity: 0.5, marginBottom: "8px" }} />
+                <div
+                  style={{
+                    fontSize: "64px",
+                    opacity: 0.5,
+                    marginBottom: "8px",
+                  }}
+                >
+                  🎬
+                </div>
                 <p style={{ fontWeight: "500", marginBottom: "4px" }}>
                   Poster Coming Soon
                 </p>
@@ -667,7 +650,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Priority indicator */}
             <div
               style={{
                 ...styles.priorityDot,
@@ -675,7 +657,6 @@ export default function App() {
               }}
             ></div>
 
-            {/* Remove button */}
             {onRemove && (
               <button
                 onClick={(e) => {
@@ -702,12 +683,10 @@ export default function App() {
           </div>
         </div>
 
-        {/* Label Plate */}
         <div style={styles.labelPlate}>
           <div style={styles.labelText}>{label}</div>
         </div>
 
-        {/* Movie Info */}
         <div style={styles.movieInfo}>
           <h3 style={styles.movieTitle}>
             {movie.title}
@@ -725,17 +704,6 @@ export default function App() {
             {movie.added_by && (
               <div style={styles.movieDetailItem}>👤 {movie.added_by}</div>
             )}
-            {movie.tmdb_id && (
-              <div
-                style={{
-                  ...styles.movieDetailItem,
-                  fontSize: "12px",
-                  color: "#6b7280",
-                }}
-              >
-                TMDB ID: {movie.tmdb_id}
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -748,6 +716,9 @@ export default function App() {
         <div style={styles.header}>
           <h1 style={styles.mainTitle}>CINEMA QUEUE</h1>
           <div style={styles.subtitle}>WHAT ARE WE WATCHING NEXT</div>
+          <p style={styles.urlText}>
+            Visit: <span style={styles.urlCode}>whatarewewatchingnext</span>
+          </p>
           {loading && (
             <p style={{ color: "#60a5fa", marginTop: "8px" }}>
               Loading movies...
@@ -780,7 +751,7 @@ export default function App() {
               Object.assign(e.target.style, styles.addButton)
             }
           >
-            <Plus size={20} style={{ marginRight: "8px" }} />
+            <span style={{ fontSize: "20px", marginRight: "8px" }}>➕</span>
             Add Movie
           </button>
         </div>
@@ -999,6 +970,7 @@ export default function App() {
                   movie={movie}
                   label="COMING SOON"
                   onRemove={removeMovie}
+                  styled={styles.posterFrameComingSoon}
                 />
               ))}
             </div>
@@ -1007,10 +979,15 @@ export default function App() {
 
         {movies.length === 0 && (
           <div style={styles.emptyState}>
-            <Film
-              size={96}
-              style={{ margin: "0 auto 24px auto", opacity: 0.3 }}
-            />
+            <div
+              style={{
+                fontSize: "96px",
+                margin: "0 auto 24px auto",
+                opacity: 0.3,
+              }}
+            >
+              🎬
+            </div>
             <p style={styles.emptyTitle}>No Movies Scheduled</p>
             <p>Add some movies to your cinema queue!</p>
           </div>
